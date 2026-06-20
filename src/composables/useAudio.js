@@ -96,6 +96,15 @@ export function useAudio() {
     }
   }
 
+  function playCombo() {
+    initAudio()
+    playTone(523, 0.1, 'sine', 0.3)
+    setTimeout(() => playTone(659, 0.1, 'sine', 0.3), 80)
+    setTimeout(() => playTone(784, 0.1, 'sine', 0.3), 160)
+    setTimeout(() => playTone(1047, 0.2, 'sine', 0.4), 240)
+    setTimeout(() => playTone(1175, 0.25, 'sine', 0.35), 350)
+  }
+
   function toggleMute() {
     muted.value = !muted.value
   }
@@ -112,6 +121,7 @@ export function useAudio() {
     playEat,
     playCraft,
     playBlizzard,
+    playCombo,
     toggleMute
   }
 }

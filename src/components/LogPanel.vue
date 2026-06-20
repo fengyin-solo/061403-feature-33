@@ -120,6 +120,14 @@ defineProps({
   color: #d2b4de;
 }
 
+.log-item.combo {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.3), rgba(255, 140, 0, 0.2));
+  border-left: 3px solid #ffd700;
+  color: #ffd700;
+  font-weight: bold;
+  text-shadow: 0 0 4px rgba(255, 215, 0, 0.3);
+}
+
 .log-time {
   color: rgba(255, 255, 255, 0.5);
   margin-right: 8px;

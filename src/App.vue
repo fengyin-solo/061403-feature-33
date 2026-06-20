@@ -65,6 +65,9 @@
             :canCraft="wood >= 2 && hide >= 1"
             :huntRate="huntSuccessRate"
             :food="food"
+            :comboCount="comboCount"
+            :comboTip="comboTip"
+            :lastCombo="lastComboTriggered"
             @chop="handleChop"
             @hunt="handleHunt"
             @craft="handleCraft"
@@ -122,6 +125,9 @@ const {
   isDanger,
   canMakeFire,
   huntSuccessRate,
+  comboCount,
+  comboTip,
+  lastComboTriggered,
   chopWood,
   hunt,
   makeTools,
@@ -145,6 +151,7 @@ const {
   playEat,
   playCraft,
   playBlizzard,
+  playCombo,
   toggleMute
 } = useAudio()
 
@@ -234,6 +241,12 @@ watch(isBlizzard, (newVal) => {
 watch(isDanger, (newVal) => {
   if (newVal && !muted.value) {
     playDanger()
+  }
+})
+
+watch(lastComboTriggered, (newVal) => {
+  if (newVal) {
+    playCombo()
   }
 })
 </script>
