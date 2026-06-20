@@ -67,28 +67,34 @@ export function useGame() {
   const comboTip = computed(() => {
     const actions = comboActions.value
     if (actions.length === 0) return null
+
+    let bestTip = null
+    let bestMatchLen = 0
+
     for (const recipe of COMBO_RECIPES) {
       const seq = recipe.sequence
-      if (actions.length < seq.length) {
+      for (let matchLen = Math.min(actions.length, seq.length - 1); matchLen > 0; matchLen--) {
         let match = true
-        for (let i = 0; i < actions.length; i++) {
-          if (actions[i] !== seq[i]) { match = false; break }
+        for (let i = 0; i < matchLen; i++) {
+          if (actions[actions.length - matchLen + i] !== seq[i]) { match = false; break }
         }
-        if (match) {
-          const nextStep = seq[actions.length]
+        if (match && matchLen > bestMatchLen) {
+          bestMatchLen = matchLen
+          const nextStep = seq[matchLen]
           const actionNames = { chop: '砍柴', hunt: '狩猎', craft: '制作工具', fire: '生火', eat: '进食' }
-          return {
+          bestTip = {
             recipeName: recipe.name,
             recipeIcon: recipe.icon,
             nextAction: actionNames[nextStep] || nextStep,
-            progress: actions.length,
+            progress: matchLen,
             total: seq.length,
             description: recipe.description
           }
+          break
         }
       }
     }
-    return null
+    return bestTip
   })
 
   const DAY_DURATION = 30000
@@ -153,37 +159,42 @@ export function useGame() {
     return triggered
   }
 
-  function applyComboReward(recipe) {
+  function applyComboReward(recipe, phase = 'post') {
     const r = recipe.reward
     let msg = `${recipe.icon} 组合奖励【${recipe.name}】触发！`
     const details = []
+    let tempMultiplier = 1
 
-    if (r.heat) {
-      heat.value = Math.min(100, heat.value + r.heat)
-      details.push(`+${r.heat}热量`)
-    }
-    if (r.wood) {
-      wood.value += r.wood
-      details.push(`+${r.wood}木头`)
-    }
-    if (r.food) {
-      food.value += r.food
-      details.push(`+${r.food}食物`)
-    }
-    if (r.hide) {
-      hide.value += r.hide
-      details.push(`+${r.hide}兽皮`)
-    }
-    if (r.temp) {
-      temperature.value = Math.min(100, temperature.value + r.temp)
-      details.push(`+${r.temp}体温`)
-    }
-    if (r.huntBonus) {
-      huntBonusFromCombo += r.huntBonus
-      details.push(`狩猎成功率+${Math.round(r.huntBonus * 100)}%`)
-    }
-    if (r.tempMultiplier) {
-      return r.tempMultiplier
+    if (phase === 'pre') {
+      if (r.huntBonus) {
+        huntBonusFromCombo += r.huntBonus
+        details.push(`狩猎成功率+${Math.round(r.huntBonus * 100)}%`)
+      }
+      if (r.tempMultiplier) {
+        tempMultiplier = r.tempMultiplier
+        details.push(`效果×${r.tempMultiplier}`)
+      }
+    } else {
+      if (r.heat) {
+        heat.value = Math.min(100, heat.value + r.heat)
+        details.push(`+${r.heat}热量`)
+      }
+      if (r.wood) {
+        wood.value += r.wood
+        details.push(`+${r.wood}木头`)
+      }
+      if (r.food) {
+        food.value += r.food
+        details.push(`+${r.food}食物`)
+      }
+      if (r.hide) {
+        hide.value += r.hide
+        details.push(`+${r.hide}兽皮`)
+      }
+      if (r.temp) {
+        temperature.value = Math.min(100, temperature.value + r.temp)
+        details.push(`+${r.temp}体温`)
+      }
     }
 
     if (details.length > 0) {
@@ -193,7 +204,10 @@ export function useGame() {
     lastComboTriggered.value = { name: recipe.name, icon: recipe.icon }
     setTimeout(() => { lastComboTriggered.value = null }, 2000)
 
-    return 1
+    if (r.tempMultiplier && phase === 'pre') {
+      return tempMultiplier
+    }
+    return true
   }
 
   function checkGameOver() {
@@ -279,8 +293,34 @@ export function useGame() {
     addLog(`砍柴：获得 ${woodGained} 木头，消耗 ${tempCost} 体温`, 'action')
 
     if (comboResult) {
-      applyComboReward(comboResult)
-      if (comboResult.id === 'diligent' || comboResult.id === 'perfect_camp') {
+      const r = comboResult.reward
+      const details = []
+      if (r.wood) {
+        wood.value += r.wood
+        details.push(`+${r.wood}木头`)
+      }
+      if (r.heat) {
+        heat.value = Math.min(100, heat.value + r.heat)
+        details.push(`+${r.heat}热量`)
+      }
+      if (r.food) {
+        food.value += r.food
+        details.push(`+${r.food}食物`)
+      }
+      if (r.hide) {
+        hide.value += r.hide
+        details.push(`+${r.hide}兽皮`)
+      }
+      if (r.temp) {
+        temperature.value = Math.min(100, temperature.value + r.temp)
+        details.push(`+${r.temp}体温`)
+      }
+      if (details.length > 0) {
+        addLog(`${comboResult.icon} 组合奖励【${comboResult.name}】触发！${details.join('，')}`, 'combo')
+        lastComboTriggered.value = { name: comboResult.name, icon: comboResult.icon }
+        setTimeout(() => { lastComboTriggered.value = null }, 2000)
+      }
+      if (comboResult.id === 'diligent') {
         resetCombo()
       }
     }
@@ -301,6 +341,11 @@ export function useGame() {
     const multiplier = isBlizzard.value ? 2 : 1
     const tempCost = 8 * multiplier
 
+    const preComboHuntBonus = comboResult && comboResult.reward.huntBonus ? comboResult.reward.huntBonus : 0
+    if (preComboHuntBonus > 0) {
+      huntBonusFromCombo += preComboHuntBonus
+    }
+
     temperature.value = Math.max(0, temperature.value - tempCost)
 
     if (Math.random() < huntSuccessRate.value) {
@@ -314,9 +359,35 @@ export function useGame() {
     }
 
     if (comboResult) {
-      applyComboReward(comboResult)
-      if (comboResult.id === 'perfect_camp') {
-        resetCombo()
+      const r = comboResult.reward
+      const details = []
+      if (r.huntBonus) {
+        details.push(`狩猎成功率+${Math.round(r.huntBonus * 100)}%（本次已生效）`)
+      }
+      if (r.wood) {
+        wood.value += r.wood
+        details.push(`+${r.wood}木头`)
+      }
+      if (r.heat) {
+        heat.value = Math.min(100, heat.value + r.heat)
+        details.push(`+${r.heat}热量`)
+      }
+      if (r.food) {
+        food.value += r.food
+        details.push(`+${r.food}食物`)
+      }
+      if (r.hide) {
+        hide.value += r.hide
+        details.push(`+${r.hide}兽皮`)
+      }
+      if (r.temp) {
+        temperature.value = Math.min(100, temperature.value + r.temp)
+        details.push(`+${r.temp}体温`)
+      }
+      if (details.length > 0) {
+        addLog(`${comboResult.icon} 组合奖励【${comboResult.name}】触发！${details.join('，')}`, 'combo')
+        lastComboTriggered.value = { name: comboResult.name, icon: comboResult.icon }
+        setTimeout(() => { lastComboTriggered.value = null }, 2000)
       }
     }
 
@@ -348,7 +419,33 @@ export function useGame() {
     addLog(`制作工具：获得 1 工具，消耗 ${tempCost} 体温`, 'success')
 
     if (comboResult) {
-      applyComboReward(comboResult)
+      const r = comboResult.reward
+      const details = []
+      if (r.wood) {
+        wood.value += r.wood
+        details.push(`+${r.wood}木头`)
+      }
+      if (r.heat) {
+        heat.value = Math.min(100, heat.value + r.heat)
+        details.push(`+${r.heat}热量`)
+      }
+      if (r.food) {
+        food.value += r.food
+        details.push(`+${r.food}食物`)
+      }
+      if (r.hide) {
+        hide.value += r.hide
+        details.push(`+${r.hide}兽皮`)
+      }
+      if (r.temp) {
+        temperature.value = Math.min(100, temperature.value + r.temp)
+        details.push(`+${r.temp}体温`)
+      }
+      if (details.length > 0) {
+        addLog(`${comboResult.icon} 组合奖励【${comboResult.name}】触发！${details.join('，')}`, 'combo')
+        lastComboTriggered.value = { name: comboResult.name, icon: comboResult.icon }
+        setTimeout(() => { lastComboTriggered.value = null }, 2000)
+      }
     }
 
     checkGameOver()
@@ -371,7 +468,33 @@ export function useGame() {
     addLog(`生火：获得 ${heatGained} 热量，体温上升 10`, 'success')
 
     if (comboResult) {
-      applyComboReward(comboResult)
+      const r = comboResult.reward
+      const details = []
+      if (r.heat) {
+        heat.value = Math.min(100, heat.value + r.heat)
+        details.push(`+${r.heat}热量`)
+      }
+      if (r.wood) {
+        wood.value += r.wood
+        details.push(`+${r.wood}木头`)
+      }
+      if (r.food) {
+        food.value += r.food
+        details.push(`+${r.food}食物`)
+      }
+      if (r.hide) {
+        hide.value += r.hide
+        details.push(`+${r.hide}兽皮`)
+      }
+      if (r.temp) {
+        temperature.value = Math.min(100, temperature.value + r.temp)
+        details.push(`+${r.temp}体温`)
+      }
+      if (details.length > 0) {
+        addLog(`${comboResult.icon} 组合奖励【${comboResult.name}】触发！${details.join('，')}`, 'combo')
+        lastComboTriggered.value = { name: comboResult.name, icon: comboResult.icon }
+        setTimeout(() => { lastComboTriggered.value = null }, 2000)
+      }
       resetCombo()
     }
   }
@@ -387,12 +510,16 @@ export function useGame() {
 
     food.value -= 1
     const baseTempGained = Math.floor(Math.random() * 10) + 5
-    const tempMultiplier = comboResult ? applyComboReward(comboResult) : 1
+
+    const tempMultiplier = comboResult && comboResult.reward.tempMultiplier ? comboResult.reward.tempMultiplier : 1
     const tempGained = Math.round(baseTempGained * tempMultiplier)
     temperature.value = Math.min(100, temperature.value + tempGained)
 
     if (tempMultiplier > 1) {
-      addLog(`进食：体温恢复 ${tempGained}（组合加成×${tempMultiplier}）`, 'success')
+      addLog(`进食：体温恢复 ${tempGained}（基础${baseTempGained}×${tempMultiplier} 组合加成）`, 'success')
+      addLog(`${comboResult.icon} 组合奖励【${comboResult.name}】触发！体温恢复×${tempMultiplier}（本次已生效）`, 'combo')
+      lastComboTriggered.value = { name: comboResult.name, icon: comboResult.icon }
+      setTimeout(() => { lastComboTriggered.value = null }, 2000)
       resetCombo()
     } else {
       addLog(`进食：体温恢复 ${tempGained}`, 'success')
